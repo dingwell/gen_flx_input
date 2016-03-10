@@ -23,11 +23,13 @@ print_help(){
   echo "\tNote: options must be given _before_ the filename"
   echo ""
   echo "OPTIONS"
-  echo "\t-r, -R <factor>"
+  echo "\t-r, -R <factor>|<factorX>,<factorY>"
   echo "\t\tIncrease resolution of generated OUTGRID file relative the input"
   echo "\t\tresolution. <factor> must be an integer, if e.g. the resolution in"
   echo "\t\tthe GRIB-file is 1.0 degrees and <factor> is 5, then the resolution"
   echo "\t\tin OUTGRID will be 0.2 (i.e. 1.0/5)."
+  echo "\t\tIf 2 values are given (e.g. '-r2,4') then different factors are"
+  echo "\t\tapplied in X and Y. (sometimes useful for mid-latitudes)"
   echo "\t\tBeware of truncations errors!"
   echo ""
   echo "\t-z <list of ztop values>"
@@ -85,11 +87,19 @@ fi
 
 # Check that RSCALE is set up properly
 RE_INT='^[0-9]+$' # Regular expression which only matches "integer" variables 
+RE_2INTS='^[0-9]+,[0-9]+$'  # Matches an integer pair separated by a comma
 # (actually, all bash variables are string variables, but this matches variables
 #  which can be interpreted as integers (i.e. that only contain digits) )
 if [[ -z $RSCALE ]]; then # if unset
-  RSCALE=1    # Set it to 1 (same resolution as input)
-elif ! [[ $RSCALE =~ $RE_INT ]]; then  # Check if $RSCALE can be used as an integer
+  RSCALE_X=1    # Set it to 1 (same resolution as input)
+  RSCALE_Y=1
+elif ! [[ $RSCALE =~ $RE_INT ]]; then  # RSCALE is a single integer
+  RSCALE_X=$RSCALE
+  RSCALE_Y=$RSCALE
+elif [[ $RSCALE =~ $RE_2INTS ]]; then # RSCALE is a pair of integers
+  RSCALE_X=$(echo "$RSCALE"|sed 's/,.*//')
+  RSCALE_Y=$(echo "$RSCALE"|sed 's/.*,//')
+else  # Something wrong with RSCALE
   # ('=~' expands righthand side as extended regular expression)
   echo "option '-r' passed, but argument is not an integer!" 1>&2
   echo "(argument given: -r$RSCALE)" 1>&2
@@ -128,8 +138,8 @@ if which grib_dump >/dev/null; then
   DY=$(grep "iDirectionIncrementInDegrees"  "$TMPFILE"|egrep -o '[0-9]+\.*[0-9]*')
 
   if [[ RSCALE != 1 ]]; then  # Apply resolution scaling
-    DX=$(echo "scale=$PREC; $DX/$RSCALE"|bc)
-    DY=$(echo "scale=$PREC; $DY/$RSCALE"|bc)
+    DX=$(echo "scale=$PREC; $DX/$RSCALE_X"|bc)
+    DY=$(echo "scale=$PREC; $DY/$RSCALE_Y"|bc)
   fi
   # Calculate number of grid points:
   #echo "LON1=$LON1; LON2=$LON2; DX=$DX"
