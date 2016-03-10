@@ -16,22 +16,47 @@ ERR_ARG=10
 NO_ARGS=0 
 E_OPTERROR=85
 
+print_help(){
+  echo "SYNOPSIS"
+  echo "\t$(basename $0) [-r N] [-z 1,2,..] GRIBFILE"  # Explain usage
+  echo ""
+  echo "\tNote: options must be given _before_ the filename"
+  echo ""
+  echo "OPTIONS"
+  echo "\t-r, -R <factor>"
+  echo "\t\tIncrease resolution of generated OUTGRID file relative the input"
+  echo "\t\tresolution. <factor> must be an integer, if e.g. the resolution in"
+  echo "\t\tthe GRIB-file is 1.0 degrees and <factor> is 5, then the resolution"
+  echo "\t\tin OUTGRID will be 0.2 (i.e. 1.0/5)."
+  echo "\t\tBeware of truncations errors!"
+  echo ""
+  echo "\t-z <list of ztop values>"
+  echo "\t\tSpecifies the OUTGRID levels. The argument is a comma-separated"
+  echo "\t\tlist of z-values in metres a.g.l."
+  echo "\t\tNote: this is directly fed to the output and no check of validity"
+  echo "\t\t      will be made by this script!"
+}
+
 if [ $# -eq "$NO_ARGS" ]; then  # No arguments given
-  echo "Usage: $(basename $0) [-r N] [-z 1,2,..] GRIBFILE"  # Explain usage
-  echo "  Options must be given _before_ the filename"
+  echo "No arguments given" 2>&1
+  echo "For help use: '$(basename $0) -h'" 2>&1
   exit $E_OPTERROR          # Exit
 fi  
 
 
-while getopts ":r:z:" Option
+while getopts ":hr:z:" Option
 do
   case $Option in
-    r | R )
+    h)  # Help
+      print_help  # Print help
+      exit 0      # Exit
+      ;;
+    r | R ) # Specify resolution scaling
       #echo "Resolution scaling: option -r-   [OPTIND=${OPTIND}]"
       #echo "Scaling set to $OPTARG"
       RSCALE=$OPTARG
       ;;
-    z )
+    z ) # Specify z-levels
       #echo "z-levels specified option -$Option-   [OPTIND=${OPTIND}]"
       #echo "Levels: $OPTARG"
       ZTOPS="$OPTARG"
@@ -63,8 +88,8 @@ RE_INT='^[0-9]+$' # Regular expression which only matches "integer" variables
 # (actually, all bash variables are string variables, but this matches variables
 #  which can be interpreted as integers (i.e. that only contain digits) )
 if [[ -z $RSCALE ]]; then # if unset
-  RSCALE=1    # Set it
-elif ! [[ $RSCALE =~ $RE_INT ]] then  # Check if $RSCALE can be used as an integer
+  RSCALE=1    # Set it to 1 (same resolution as input)
+elif ! [[ $RSCALE =~ $RE_INT ]]; then  # Check if $RSCALE can be used as an integer
   # ('=~' expands righthand side as extended regular expression)
   echo "option '-r' passed, but argument is not an integer!" 1>&2
   echo "(argument given: -r$RSCALE)" 1>&2
@@ -102,6 +127,10 @@ if which grib_dump >/dev/null; then
   DX=$(grep "iDirectionIncrementInDegrees"  "$TMPFILE"|egrep -o '[0-9]+\.*[0-9]*')
   DY=$(grep "iDirectionIncrementInDegrees"  "$TMPFILE"|egrep -o '[0-9]+\.*[0-9]*')
 
+  if [[ RSCALE != 1 ]]; then  # Apply resolution scaling
+    DX=$(echo "scale=$PREC; $DX/$RSCALE"|bc)
+    DY=$(echo "scale=$PREC; $DY/$RSCALE"|bc)
+  fi
   # Calculate number of grid points:
   #echo "LON1=$LON1; LON2=$LON2; DX=$DX"
   NX=$(echo "scale=$PREC; ($LON2-$LON1)/$DX" |bc)
@@ -116,6 +145,10 @@ if which grib_dump >/dev/null; then
   # Truncate NX & NY to 0 decimals:
   NX=$(echo "$NX/1"|bc)
   NY=$(echo "$NY/1"|bc)
+
+  # Truncate DX,DY to $NDEC decimals:
+  DX=$(echo "scale=$NDEC; $DX/1"|bc)
+  DY=$(echo "scale=$NDEC; $DY/1"|bc)
 
   # Ensure that LON1 is within [-180,180] ( [0,360] is not supported in flexpart! )
   if [[ $LON1 < "-180" ]]; then
