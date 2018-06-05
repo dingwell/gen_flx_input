@@ -143,7 +143,13 @@ if which grib_dump >/dev/null; then
   fi
   # Calculate number of grid points:
   #echo "LON1=$LON1; LON2=$LON2; DX=$DX"
-  NX=$(echo "scale=$PREC; ($LON2-$LON1)/$DX" |bc)
+  X1=$LON1
+  X2=$LON2
+  while [[ $X1 -gt $X2 ]]; do
+    X2=$(echo "$X2+360"|bc)
+  done
+  echo $X1
+  NX=$(echo "scale=$PREC; ($X2-$X1)/$DX" |bc)
   NY=$(echo "scale=$PREC; ($LAT1-$LAT2)/$DY" |bc)
 
   # Add padding representing half of the resolution:
@@ -180,7 +186,7 @@ if which grib_dump >/dev/null; then
   echo "  OUTHEIGHTS   =  $ZTOPS"
   echo "/"
 
-  rm $TMPFILE
+  #rm $TMPFILE
 else
   echo "Unable to find grib_dump in \$PATH, please ensure it is installed on your system." >&2
   exit 10
